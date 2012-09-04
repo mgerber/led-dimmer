@@ -25,53 +25,90 @@
 ; VARIABLE DEFINITIONS
 ;------------------------------------------------------------------------------
 
-SWITCH1						EQU		GPIO1
-SWITCH2						EQU		GPIO3
-LED1						EQU		GPIO2
-LED2						EQU		GPIO4
+BUTTON1							EQU		GPIO1
+BUTTON2							EQU		GPIO3
+LED1							EQU		GPIO2
+LED2							EQU		GPIO4
 
+LEDOFFTHRESHOLD					EQU		H'B0'
+LEDLOWTHRESHOLD					EQU		H'FB'
+
+LEDHIGHOFFSET					EQU		H'10'
+LEDLOWOFFSET					EQU		H'90'
+
+VTIMER1_LED1_L_OFF				EQU		H'00'
+VTIMER1_LED1_H_OFF				EQU		H'B0'
+VTIMER1_LED1_L_ON				EQU		H'FF'
+VTIMER1_LED1_H_ON				EQU		H'FF'
+VTIMER1_LED2_L_OFF				EQU		H'00'
+VTIMER1_LED2_H_OFF				EQU		H'B0'
+VTIMER1_LED2_L_ON				EQU		H'FF'
+VTIMER1_LED2_H_ON				EQU		H'FF'
+
+BUTTON_DEBOUNCE_DELAY			EQU		H'00'
+BUTTON_DEBOUNCE_DELAY_EXT		EQU		H'FF'
+BUTTON_FADE_DELAY				EQU		H'A0'
+BUTTON_FADE_DELAY_EXT			EQU		H'FF'
+BUTTON_SWITCH_DELAY				EQU		H'00'
+BUTTON_SWITCH_DELAY_EXT			EQU		H'F7'
 
 ; example of using Shared Uninitialized Data Section
-INT_VAR     				UDATA_SHR   			;0x20   
-W_TEMP      				RES		1				; variable used for context saving 
-STATUS_TEMP 				RES		1				; variable used for context saving
-TEMPF						RES		1
+INT_VAR     					UDATA_SHR   			;
+W_TEMP      					RES		1				; variable used for context saving 
+STATUS_TEMP 					RES		1				; variable used for context saving
+TEMPF							RES		1
+
+CONST_00						RES		1
 
 
-LED1CON						RES		1
-LED1OFF						EQU		H'00'
-LED1DIMM					EQU		H'01'
-LED1ON						EQU		H'02'
-LED1BUTTONLOCK				EQU		H'03'
+LED1CON							RES		1
+LED1OFF							EQU		H'00'
+LED1FADE						EQU		H'01'
+LED1ON							EQU		H'02'
+LED1BUTTONLOCK					EQU		H'03'
+LED1BUTTONSWITCHDELAY			EQU		H'04'
+LED1FADEOUT						EQU		H'05'
 
-LED2CON						RES		1
-LED2OFF						EQU		H'04'
-LED2DIMM					EQU		H'05'
-LED2ON						EQU		H'06'
-LED2SWITCHLOCK				EQU		H'07'
+LED2CON							RES		1
+LED2OFF							EQU		H'00'
+LED2FADE						EQU		H'01'
+LED2ON							EQU		H'02'
+LED2BUTTONLOCK					EQU		H'03'
+LED2BUTTONSWITCHDELAY			EQU		H'04'
+LED2FADEOUT						EQU		H'05'
 
-VPWMCON						RES		1
-VPWMID0						EQU 	H'00'
-VPWMID1						EQU 	H'01'
+VPWMCON							RES		1
+VPWMID0							EQU		H'00'
+VPWMID1							EQU 	H'01'
 
+BUTTON1_NEW						RES		1
+BUTTON1_OLD						RES		1
+BUTTON2_NEW						RES		1
+BUTTON2_OLD						RES		1
 
-SWITCH_NEW	RES		1
-SWITCH_OLD	RES		1
+BUTTON_DEBOUNCE_DELAY_RELOAD	RES		1
+BUTTON_SWITCH_DELAY_RELOAD		RES		1
+BUTTON_FADE_DELAY_RELOAD		RES		1
 
-VTIMER0_LED1_RELOAD			RES		1
-VTIMER0_LED2_RELOAD			RES		1
+VTIMER0_LED1_RELOAD				RES		1
+VTIMER0_LED2_RELOAD				RES		1
+VTIMER0_EXT00					RES		1
+VTIMER0_EXT01					RES		1
+VTIMER0_EXT02					RES		1
+VTIMER0_EXT03					RES		1
 
-VTIMER1_LED1_RELOAD_L_OFF	RES		1
-VTIMER1_LED1_RELOAD_H_OFF	RES		1
-VTIMER1_LED1_RELOAD_L_ON	RES		1
-VTIMER1_LED1_RELOAD_H_ON	RES		1
-VTIMER1_LED2_RELOAD_L_OFF	RES		1
-VTIMER1_LED2_RELOAD_H_OFF	RES		1
-VTIMER1_LED2_RELOAD_L_ON	RES		1
-VTIMER1_LED2_RELOAD_H_ON	RES		1
+VTIMER1_LED1_RELOAD_L_OFF		RES		1
+VTIMER1_LED1_RELOAD_H_OFF		RES		1
+VTIMER1_LED1_RELOAD_L_ON		RES		1
+VTIMER1_LED1_RELOAD_H_ON		RES		1
+VTIMER1_LED2_RELOAD_L_OFF		RES		1
+VTIMER1_LED2_RELOAD_H_OFF		RES		1
+VTIMER1_LED2_RELOAD_L_ON		RES		1
+VTIMER1_LED2_RELOAD_H_ON		RES		1
 
-			VTIMER0 2
+			VTIMER0 4
 			VTIMER1 2
+
 ;------------------------------------------------------------------------------
 ; EEPROM INITIALIZATION
 ;
@@ -87,6 +124,8 @@ VTIMER1_LED2_RELOAD_H_ON	RES		1
 ;------------------------------------------------------------------------------
 
 OSC       CODE    0x03FF
+		  RETLW   H'B0'
+
 
 ; Internal RC calibration value is placed at location 0x3FF by Microchip as
 ; a 0xADDLW K instruction, where the K is a literal value to be loaded into 
@@ -114,40 +153,63 @@ INIT
         MOVWF   OSCCAL        ; update register with factory cal value 
         BCF     STATUS,RP0    ; set file register bank to 0
 ;------------------------------------------------------------------------------
-; PROGRAMM INIT
-;-----------------------------------------------------------------------------
-		banksel	VTIMER0_LED1_RELOAD
-		clrf	VTIMER0_LED1_RELOAD
-		clrf	VTIMER0_LED2_RELOAD
-		MOVLW	H'A0'
-		MOVWF	VTIMER0_LED1_RELOAD
-		MOVLW	H'C0'
-		MOVWF	VTIMER0_LED2_RELOAD
+; MEMORY INIT
+;------------------------------------------------------------------------------
+		clrf	CONST_00
 
-		clrf	VTIMER1_LED1_RELOAD_L_OFF
-		clrf	VTIMER1_LED2_RELOAD_L_OFF
-		clrf	VTIMER1_LED1_RELOAD_H_OFF
-		clrf	VTIMER1_LED2_RELOAD_H_OFF
-		clrf	VTIMER1_LED1_RELOAD_L_ON
-		clrf	VTIMER1_LED2_RELOAD_L_ON
-		clrf	VTIMER1_LED1_RELOAD_H_ON
-		clrf	VTIMER1_LED2_RELOAD_H_ON
-		MOVLW	H'01'
-		MOVWF	VTIMER1_LED1_RELOAD_H_OFF
-		MOVLW	H'01'
-		MOVWF	VTIMER1_LED1_RELOAD_L_OFF
-		MOVLW	H'01'
-		MOVWF	VTIMER1_LED2_RELOAD_H_OFF
-		MOVLW	H'02'
-		MOVWF	VTIMER1_LED2_RELOAD_L_OFF
+		clrf	LED1CON
+		bsf		LED1CON,LED1OFF
+
+		clrf	LED2CON
+		bsf		LED2CON,LED2OFF
+
+		clrf	VPWMCON
+		clrf	BUTTON1_NEW
+		clrf	BUTTON1_OLD
+		bsf		BUTTON1_OLD,BUTTON1
+		clrf	BUTTON2_NEW
+		clrf	BUTTON2_OLD
+		bsf		BUTTON2_OLD,BUTTON2
+		
+		movlw	BUTTON_SWITCH_DELAY
+		movwf	BUTTON_SWITCH_DELAY_RELOAD
+		movlw	BUTTON_FADE_DELAY
+		movwf	BUTTON_FADE_DELAY_RELOAD
+		movlw	BUTTON_DEBOUNCE_DELAY
+		movwf	BUTTON_DEBOUNCE_DELAY_RELOAD
+;------------------------------------------------------------------------------
+; PROGRAMM INIT
+;------------------------------------------------------------------------------
+		movlw	VTIMER1_LED1_H_OFF
+		movwf	VTIMER1_LED1_RELOAD_H_OFF
+		movlw	VTIMER1_LED1_L_OFF
+		movwf	VTIMER1_LED1_RELOAD_L_OFF
+		movlw	VTIMER1_LED1_H_ON
+		movwf	VTIMER1_LED1_RELOAD_H_ON
+		movlw	VTIMER1_LED1_L_ON
+		movwf	VTIMER1_LED1_RELOAD_L_ON
+		movlw	VTIMER1_LED2_H_OFF
+		movwf	VTIMER1_LED2_RELOAD_H_OFF
+		movlw	VTIMER1_LED2_L_OFF
+		movwf	VTIMER1_LED2_RELOAD_L_OFF
+		movlw	VTIMER1_LED2_H_ON
+		movwf	VTIMER1_LED2_RELOAD_H_ON
+		movlw	VTIMER1_LED2_L_ON
+		movwf	VTIMER1_LED2_RELOAD_L_ON
+
 ;------------------------------------------------------------------------------
 ; GPIO
 ;-----------------------------------------------------------------------------
 		banksel		OPTION_REG
-		bcf			OPTION_REG,NOT_GPPU
+		bcf			OPTION_REG,PSA
+		bsf			OPTION_REG,PS0
+		bsf			OPTION_REG,PS1
+		bsf			OPTION_REG,PS2
+		
 
 		banksel		GPIO
 		clrf		GPIO
+
 		movlw		07h			;set GP<0:2>	
 		movwf		CMCON		;to digital IO
 		IFDEF 		__12F675
@@ -156,12 +218,9 @@ INIT
 		ENDIF
 		banksel		TRISIO
 		clrf		TRISIO
-		bsf			TRISIO,SWITCH1
-		bsf			TRISIO,SWITCH2
-		banksel		WPU
+		bsf			TRISIO,BUTTON1
+		bsf			TRISIO,BUTTON2
 		clrf		WPU
-		bsf			WPU,SWITCH1
-		bsf			WPU,SWITCH2
 		
 ;------------------------------------------------------------------------------
 ; VTIMER0
@@ -169,34 +228,22 @@ INIT
 		banksel	TMR0
 		clrf	TMR0
 		VTIMER0_INIT
-		VTIMER0_ON	VTMR00ID,VTIMER0_LED1_RELOAD
-		VTIMER0_ON	VTMR01ID,VTIMER0_LED2_RELOAD
-		VTIMER0_CHECK
-		VTIMER0_START
-		banksel	OPTION_REG
-;		bcf		OPTION_REG,T0CS
 ;------------------------------------------------------------------------------
 ; VTIMER1
 ;------------------------------------------------------------------------------
-		banksel	TMR1L
 		clrf	TMR1L
 		clrf	TMR1H
 		clrf	T1CON
+
 		VTIMER1_INIT
-		VTIMER1_ON	VTMR10ID,VTIMER1_LED1_RELOAD_L_OFF,VTIMER1_LED1_RELOAD_H_OFF
-		VTIMER1_ON	VTMR11ID,VTIMER1_LED2_RELOAD_L_OFF,VTIMER1_LED2_RELOAD_H_OFF
-		VTIMER1_CHECK
-		VTIMER1_START
-		banksel	T1CON
 		bsf		T1CON,TMR1ON
 ;------------------------------------------------------------------------------
 ; INTERRUPT
 ;------------------------------------------------------------------------------
 		banksel	IOC
 		clrf	IOC
-		bsf		IOC,SWITCH1
-		bsf		IOC,SWITCH2
-		banksel	PIE1
+		bsf		IOC,BUTTON1
+		bsf		IOC,BUTTON2
 		clrf	PIE1
 		bsf		PIE1,TMR1IE
 		
@@ -227,7 +274,7 @@ INT_VECTOR    CODE    0x0004  ; interrupt vector location
 
 ; isr code can go here or be located as a call subroutine elsewhere
 ;------------------------------------------------------------------------------
-;       VTIMER1 interupt
+;       VTIMER1 interrupt
 ;------------------------------------------------------------------------------
 		banksel	PIR1
 		_if		_BTF,PIR1,TMR1IF,_S
@@ -259,73 +306,316 @@ INT_VECTOR    CODE    0x0004  ; interrupt vector location
 				_endif
 			_endif
 
-			VTIMER1_START
 			bcf		PIR1,TMR1IF
+			VTIMER1_START
 			bsf		T1CON,TMR1ON
+VTIMER1_END:
 		_endif
 
 ;------------------------------------------------------------------------------
-;       GPIO interupt
+;       GPIO interrupt
 ;------------------------------------------------------------------------------
-		banksel	INTCON
 		_if		_BTF,INTCON,GPIF,_S
-			banksel	GPIO
-			MOVF	GPIO,w
-			MOVWF	SWITCH_NEW
-			_if		_BTF,SWITCH_NEW,SWITCH1,_S			;new button is high (released)
-				_if	_BTF,SWITCH_OLD,SWITCH1,_C			;old button was low	(pressed)
-					bsf	SWITCH_OLD,SWITCH1				;we captured a "button release", remember new button state
-
-					banksel OPTION_REG
-					bcf	OPTION_REG,T0CS
-
-					banksel	GPIO
-					bsf	GPIO,LED1
-				_endif
-			_else										;new button is low (pressed)
-				_if	_BTF,SWITCH_OLD,SWITCH1,_S			;old button was high (released)
-					bcf	SWITCH_OLD,SWITCH1				;we captured a "button press", remember new button state
-
-					_if _BTF,LED1CON,LED1BUTTONLOCK,_C	;continue only, if button not locked
-						banksel OPTION_REG
-						bsf	OPTION_REG,T0CS
-
-						banksel	GPIO					
-						bcf	GPIO,LED1
-					_endif
-				_endif
-			_endif
-
-			_if		_BTF,SWITCH_NEW,SWITCH2,_S
-				_if	_BTF,SWITCH_OLD,SWITCH2,_C
-					bsf	SWITCH_OLD,SWITCH2
-					bsf	GPIO,LED2
-				_endif
-			_else
-				_if	_BTF,SWITCH_OLD,SWITCH2,_S
-					bcf	SWITCH_OLD,SWITCH2
-					bcf	GPIO,LED2
-				_endif
-			_endif
-
-			bcf		INTCON,GPIF
-		_endif
-        
-		_if		_BTF,INTCON,T0IF,_S
+			banksel	OPTION_REG
 			bsf		OPTION_REG,T0CS
-			VTIMER0_CHECK
-			_if		_BTF,VTMR0INT,VTMR00ID,_S
-				bcf	VTMR0INT,VTMR00ID
-				VTIMER0_ON	VTMR00ID,VTIMER0_LED1_RELOAD
+			banksel	VTMR0CON
+			VTIMER0_SUSPEND
+			MOVF	GPIO,w
+
+			_if _BTF,LED1CON,LED1BUTTONLOCK,_C				;continue only, if button1 not locked
+				bsf	LED1CON,LED1BUTTONLOCK
+				movlw	BUTTON_DEBOUNCE_DELAY_EXT
+				movwf	VTIMER0_EXT00
+				VTIMER0_ON	VTMR00ID,BUTTON_DEBOUNCE_DELAY_RELOAD
 			_endif
-			_if		_BTF,VTMR0INT,VTMR01ID,_S
-				bcf	VTMR0INT,VTMR01ID
-				VTIMER0_ON	VTMR01ID,VTIMER0_LED2_RELOAD
+			_if _BTF,LED2CON,LED2BUTTONLOCK,_C				;continue only, if button2 not locked
+				bsf	LED2CON,LED2BUTTONLOCK
+				movlw	BUTTON_DEBOUNCE_DELAY_EXT
+				movwf	VTIMER0_EXT01
+				VTIMER0_ON	VTMR01ID,BUTTON_DEBOUNCE_DELAY_RELOAD
+			_endif
+			bcf		INTCON,GPIF
+			VTIMER0_START
+			banksel	OPTION_REG
+			bcf		OPTION_REG,T0CS
+		_endif
+
+
+;------------------------------------------------------------------------------
+;       VTIMER0 interrupt
+;------------------------------------------------------------------------------
+		_if		_BTF,INTCON,T0IF,_S
+			banksel	OPTION_REG
+			bsf		OPTION_REG,T0CS
+			banksel	VTMR0CON	
+			VTIMER0_CHECK
+
+			_if		_BTF,VTMR0INT,VTMR00ID,_S				;VTIMER 00 interrupted?
+				bcf	VTMR0INT,VTMR00ID						;clear VTIMER interrupt
+				incf	VTIMER0_EXT00,f						;increase VTIMER EXTENSION
+				_if	_BTF,STATUS,Z,_S						;overflow?
+					VTIMER0_OFF VTMR00ID						;switch vtimer off
+					bcf LED1CON,LED1BUTTONLOCK					;clear lock
+
+					MOVF	GPIO,w
+					MOVWF	BUTTON1_NEW
+
+					_if		_BTF,BUTTON1_NEW,BUTTON1,_S			;new button is high (released)
+						_if	_BTF,BUTTON1_OLD,BUTTON1,_C			;old button was low	(pressed)
+							bsf	BUTTON1_OLD,BUTTON1				;we captured a "button release", remember new button state
+							VTIMER0_OFF VTMR02ID				;stop fade timer
+							bcf	VTMR0INT,VTMR02ID
+
+							_if _BTF,LED1CON,LED1BUTTONSWITCHDELAY,_S	;we are in switch mode
+								VTIMER1_OFF	VTMR10ID
+								bcf	VTMR1INT,VTMR10ID
+								_if	_BTF,LED1CON,LED1OFF,_S			;LED is off
+									bsf	GPIO,LED1					;turn LED on
+									bsf	LED1CON,LED1ON
+									bcf	LED1CON,LED1OFF
+									bsf	LED1CON,LED1FADEOUT
+									movlw	H'FF'
+									movwf	VTIMER1_LED1_RELOAD_H_OFF
+									movwf	VTIMER1_LED1_RELOAD_L_OFF
+								_else								;LED is on
+									bcf	GPIO,LED1					;turn LED off
+									bcf	LED1CON,LED1ON
+									bcf	LED1CON,LED1FADE
+									bsf	LED1CON,LED1OFF
+									bcf	LED1CON,LED1FADEOUT
+									movlw	VTIMER1_LED1_H_OFF
+									movwf	VTIMER1_LED1_RELOAD_H_OFF
+									clrf	VTIMER1_LED1_RELOAD_L_OFF
+								_endif
+							_endif
+						_endif
+					_else										;new button is low (pressed)
+						_if	_BTF,BUTTON1_OLD,BUTTON1,_S			;old button was high (released)
+							bcf	BUTTON1_OLD,BUTTON1				;we captured a "button press", remember new button state
+							bsf	LED1CON,LED1BUTTONSWITCHDELAY
+							movlw	BUTTON_SWITCH_DELAY_EXT
+							movwf	VTIMER0_EXT02
+							VTIMER0_ON	VTMR02ID,BUTTON_SWITCH_DELAY_RELOAD
+						_endif									;endif old button button was high
+					_endif										;endif new button is low
+				_else											;else VTIMER EXTENSION
+					VTIMER0_ON	VTMR00ID,CONST_00				;if VTIMER extension not overflowed,restart VTIMER
+				_endif											;endif VTIMER EXTENSION
+			_endif												;endif VTMR00ID interrupt
+
+
+			_if		_BTF,VTMR0INT,VTMR01ID,_S				;VTIMER 01 interrupted?
+				bcf	VTMR0INT,VTMR01ID						;clear VTIMER interrupt
+				incf	VTIMER0_EXT01,f						;increase VTIMER EXTENSION
+				_if	_BTF,STATUS,Z,_S						;overflow?
+					VTIMER0_OFF VTMR01ID						;switch vtimer off
+					bcf LED2CON,LED2BUTTONLOCK					;clear lock
+
+					MOVF	GPIO,w
+					MOVWF	BUTTON2_NEW
+
+					_if		_BTF,BUTTON2_NEW,BUTTON2,_S			;new button is high (released)
+						_if	_BTF,BUTTON2_OLD,BUTTON2,_C			;old button was low	(pressed)
+							bsf	BUTTON2_OLD,BUTTON2				;we captured a "button release", remember new button state
+							VTIMER0_OFF VTMR03ID				;stop fade timer
+							bcf	VTMR0INT,VTMR03ID
+
+							_if _BTF,LED2CON,LED2BUTTONSWITCHDELAY,_S	;we are in switch mode
+								VTIMER1_OFF	VTMR11ID
+								bcf	VTMR1INT,VTMR11ID
+								_if	_BTF,LED2CON,LED2OFF,_S			;LED is off
+									bsf	GPIO,LED2					;turn LED on
+									bsf	LED2CON,LED2ON
+									bcf	LED2CON,LED2OFF
+									bsf	LED2CON,LED2FADEOUT
+									movlw	H'FF'
+									movwf	VTIMER1_LED2_RELOAD_H_OFF
+									movwf	VTIMER1_LED2_RELOAD_L_OFF
+								_else								;LED is on
+									bcf	GPIO,LED2					;turn LED off
+									bcf	LED2CON,LED2ON
+									bcf	LED2CON,LED2FADE
+									bsf	LED2CON,LED2OFF
+									bcf	LED2CON,LED2FADEOUT
+									movlw	VTIMER1_LED2_H_OFF
+									movwf	VTIMER1_LED2_RELOAD_H_OFF
+									clrf	VTIMER1_LED2_RELOAD_L_OFF
+								_endif
+							_endif
+						_endif
+					_else										;new button is low (pressed)
+						_if	_BTF,BUTTON2_OLD,BUTTON2,_S			;old button was high (released)
+							bcf	BUTTON2_OLD,BUTTON2				;we captured a "button press", remember new button state
+							bsf	LED2CON,LED2BUTTONSWITCHDELAY
+							movlw	BUTTON_SWITCH_DELAY_EXT
+							movwf	VTIMER0_EXT03
+							VTIMER0_ON	VTMR03ID,BUTTON_SWITCH_DELAY_RELOAD
+						_endif									;endif old button button was high
+					_endif										;endif new button is low
+				_else											;else VTIMER EXTENSION
+					VTIMER0_ON	VTMR01ID,CONST_00				;if VTIMER extension not overflowed,restart VTIMER
+				_endif											;endif VTIMER EXTENSION
+			_endif												;endif VTMR00ID interrupt
+
+
+
+			_if		_BTF,VTMR0INT,VTMR02ID,_C
+				_if _BTF,VTMR0INT,VTMR03ID,_C
+					goto NO_PWMCHANGE_EVENT
+				_endif
 			_endif
 
-			VTIMER0_START
-			banksel	INTCON
+PWMCHANGE_EVENT:
+			bcf		T1CON,TMR1ON
+			VTIMER1_SUSPEND
+			_if		_BTF,VTMR0INT,VTMR02ID,_S
+				bcf	VTMR0INT,VTMR02ID
+				_if	_INCF,VTIMER0_EXT02,f,_Z						;increase VTIMER EXTENSION -> overflow?
+					bcf	LED1CON,LED1BUTTONSWITCHDELAY
+
+					movf	VTIMER1_LED1_RELOAD_H_OFF,w
+					sublw	LEDLOWTHRESHOLD
+					_if	_BTF,STATUS,C,_C
+						movlw	LEDHIGHOFFSET
+					_else
+						movlw	LEDLOWOFFSET
+					_endif
+					_if	_BTF,LED1CON,LED1FADEOUT,_S
+						subwf	VTIMER1_LED1_RELOAD_L_OFF,f
+						_if	_BTF,STATUS,C,_C
+							decf	VTIMER1_LED1_RELOAD_H_OFF,F
+						_endif
+					_else
+						addwf	VTIMER1_LED1_RELOAD_L_OFF,f
+						_if	_BTF,STATUS,C,_S
+							incf	VTIMER1_LED1_RELOAD_H_OFF,F
+						_endif
+					_endif
+					
+					_if _TSTF,VTIMER1_LED1_RELOAD_H_OFF,,_Z				;switch LED on
+						movlw	H'FF'
+						movwf	VTIMER1_LED1_RELOAD_H_OFF
+						movwf	VTIMER1_LED1_RELOAD_L_OFF
+
+						bcf LED1CON,LED1OFF
+						bsf LED1CON,LED1ON
+						bcf	LED1CON,LED1FADE
+						bsf	LED1CON,LED1FADEOUT
+						bcf	VPWMCON,VPWMID0
+						bsf GPIO,LED1
+						VTIMER0_OFF	VTMR02ID
+						VTIMER1_OFF	VTMR10ID
+					_else
+						movlw	LEDOFFTHRESHOLD
+						_if	_CPF,VTIMER1_LED1_RELOAD_H_OFF,,_LT		;switch LED off
+							movlw	VTIMER1_LED1_H_OFF
+							movwf	VTIMER1_LED1_RELOAD_H_OFF
+							clrf	VTIMER1_LED1_RELOAD_L_OFF
+
+							bsf LED1CON,LED1OFF
+							bcf LED1CON,LED1ON
+							bcf	LED1CON,LED1FADE
+							bcf	LED1CON,LED1FADEOUT
+							bcf	VPWMCON,VPWMID0
+							bcf GPIO,LED1
+							VTIMER0_OFF	VTMR02ID
+							VTIMER1_OFF	VTMR10ID
+						_else											;LED fade mode
+							bcf LED1CON,LED1OFF
+							bcf LED1CON,LED1ON
+							bsf	LED1CON,LED1FADE
+							movlw	BUTTON_FADE_DELAY_EXT
+							movwf	VTIMER0_EXT02
+							VTIMER0_ON	VTMR02ID,BUTTON_FADE_DELAY_RELOAD
+							_if	_BTF,VTMR1CON,VTMR10ID,_C				;if PWM timer is off
+								bcf	VPWMCON,VPWMID0
+								VTIMER1_ON	VTMR10ID,VTIMER1_LED1_RELOAD_L_OFF,VTIMER1_LED1_RELOAD_H_OFF
+							_endif
+						_endif
+					_endif
+				_else
+					VTIMER0_ON	VTMR02ID,CONST_00				;if VTIMER extension not overflowed,restart VTIMER
+				_endif
+			_endif
+			
+
+			_if		_BTF,VTMR0INT,VTMR03ID,_S
+				bcf	VTMR0INT,VTMR03ID
+				_if	_INCF,VTIMER0_EXT03,f,_Z				;increase VTIMER EXTENSION -> overflow?
+					bcf	LED2CON,LED2BUTTONSWITCHDELAY
+
+					movf	VTIMER1_LED2_RELOAD_H_OFF,w
+					sublw	LEDLOWTHRESHOLD
+					_if	_BTF,STATUS,C,_C
+						movlw	LEDHIGHOFFSET
+					_else
+						movlw	LEDLOWOFFSET
+					_endif
+					_if	_BTF,LED2CON,LED2FADEOUT,_S
+						subwf	VTIMER1_LED2_RELOAD_L_OFF,f
+						_if	_BTF,STATUS,C,_C
+							decf	VTIMER1_LED2_RELOAD_H_OFF,F
+						_endif
+					_else
+						addwf	VTIMER1_LED2_RELOAD_L_OFF,f
+						_if	_BTF,STATUS,C,_S
+							incf	VTIMER1_LED2_RELOAD_H_OFF,F
+						_endif
+					_endif
+					
+					_if _TSTF,VTIMER1_LED2_RELOAD_H_OFF,,_Z				;switch LED on
+						movlw	H'FF'
+						movwf	VTIMER1_LED2_RELOAD_H_OFF
+						movwf	VTIMER1_LED2_RELOAD_L_OFF
+
+						bcf LED2CON,LED2OFF
+						bsf LED2CON,LED2ON
+						bcf	LED2CON,LED2FADE
+						bsf	LED2CON,LED2FADEOUT
+						bcf	VPWMCON,VPWMID1
+						bsf GPIO,LED2
+						VTIMER0_OFF	VTMR03ID
+						VTIMER1_OFF	VTMR11ID
+					_else
+						movlw	LEDOFFTHRESHOLD
+						_if	_CPF,VTIMER1_LED2_RELOAD_H_OFF,,_LT		;switch LED off
+							movlw	VTIMER1_LED2_H_OFF
+							movwf	VTIMER1_LED2_RELOAD_H_OFF
+							clrf	VTIMER1_LED2_RELOAD_L_OFF
+
+							bsf LED2CON,LED2OFF
+							bcf LED2CON,LED2ON
+							bcf	LED2CON,LED2FADE
+							bcf	LED2CON,LED2FADEOUT
+							bcf	VPWMCON,VPWMID1
+							bcf GPIO,LED2
+							VTIMER0_OFF	VTMR03ID
+							VTIMER1_OFF	VTMR11ID
+						_else											;LED fade mode
+							bcf LED2CON,LED2OFF
+							bcf LED2CON,LED2ON
+							bsf	LED2CON,LED2FADE
+							movlw	BUTTON_FADE_DELAY_EXT
+							movwf	VTIMER0_EXT03
+							VTIMER0_ON	VTMR03ID,BUTTON_FADE_DELAY_RELOAD
+							_if	_BTF,VTMR1CON,VTMR11ID,_C				;if PWM timer is off
+								bcf	VPWMCON,VPWMID1
+								VTIMER1_ON	VTMR11ID,VTIMER1_LED2_RELOAD_L_OFF,VTIMER1_LED2_RELOAD_H_OFF
+							_endif
+						_endif
+					_endif
+				_else
+					VTIMER0_ON	VTMR03ID,CONST_00				;if VTIMER extension not overflowed,restart VTIMER
+				_endif
+			_endif
+
+
+			VTIMER1_START
+			bsf		T1CON,TMR1ON
+NO_PWMCHANGE_EVENT:
+
 			bcf		INTCON,T0IF
+			VTIMER0_START
 			banksel	OPTION_REG
 			bcf		OPTION_REG,T0CS
 		_endif
